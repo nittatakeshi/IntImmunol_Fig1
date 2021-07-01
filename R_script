@@ -1,0 +1,50 @@
+#reading files
+metadata<-read.table(« Users/…/GSE103967_RAW/metadata.txt",sep="\t",quote="",stringsAsFactors=F,header=T)
+metadata2<-metadata[metadata$Experiment_ID=="thymus_stroma_WT",]
+metadata2<-metadata2[,2]
+metadata2<-unique(metadata2)
+setwd("/Users/…/GSE103967_RAW")
+file<-list.files(path = "/Users/…/GSE103967_RAW")
+matchs<-paste(".*",metadata2,".txt",sep="")
+library(stringr)
+matchs1<-str_c(matchs,collapse="|",sep="")
+file1<-file[str_detect(file,pattern = matchs1)]
+g<-lapply(file1,function(x){read.table(x,sep="\t",quote="",stringsAsFactors=F)})
+f<-g[[1]]
+for (i in 2:(length(g))){
+  f<-cbind(f,g[[i]])
+}
+
+#create Seurat object and normalize
+library(dplyr)
+library(Seurat)
+seurat<-CreateSeuratObject(counts=f,project="thymus_scRNA",min.cells=3,min.features=200)
+seurat<-subset(seurat,subset = nFeature_RNA>-Inf&nFeature_RNA<11000)
+seurat<-NormalizeData(seurat,normalization.method="LogNormalize")
+
+#cell cycle scoring and regression, letters other than first letter in gene names in the .txt file should be replaced into small letters
+cc<-read.table("/Users/…/regev_lab_cell_cycle_genes.txt",sep="\t",stringsAsFactors=F)
+s<-as.character(cc[1:43,])
+g2m<-as.character(cc[44:97,])
+f<- CellCycleScoring(f, s.features = s, g2m.features = g2m, set.ident = TRUE)
+seurat <- ScaleData(seurat, vars.to.regress = c("S.Score", "G2M.Score"), features = rownames(seurat))
+
+seurat<-FindVariableFeatures(seurat,selection.method="vst")
+seurat<-RunPCA(seurat,features=VariableFeatures(object=seurat))
+seurat<-JackStraw(seurat,num.replicate=100)
+seurat <- ScoreJackStraw(seurat)
+seurat<-FindNeighbors(seurat,reduction = "pca",dims=1:15)
+seurat<-FindClusters(seurat,resolution=0.8)
+seurat<-RunUMAP(seurat, dims = 1:15)
+
+allmarkers<-FindAllMarkers(seurat,only.pos=TRUE,min.pct=0.25,logfc.threshold=0.25)
+top10<-allmarkers%>%group_by(cluster)%>%top_n(n=10,wt=avg_logFC)
+
+new.cluster.ids <- c(« mTEC Aire+ », « mTEC Ccl21a+ », »EC », « immature mFb », « mature mFb », « mTEC subtype », « lymphocyte », »thymic tuft cell », »capFb », »keratinocyte-like TEC », »mesothelial cell », »myeloid cell »)
+names(new.cluster.ids) <- levels(seurat)
+seurat <- RenameIdents(seurat, new.cluster.ids)
+
+library(ggplot2)
+DimPlot(seurat, reduction = "umap") + theme(axis.text = element_text(size = 20), axis.title = element_text(size=20), aspect.ratio = 1, legend.position = c(1,0), legend.justification = c(1,0), legend.text = element_text(size = 20))
+FeaturePlot(seurat,features = « Ccl21a ») +theme(legend.key.height = unit(2.0,"cm"), axis.text = element_blank(), axis.title = element_blank(), plot.title = element_text(size = 40), legend.text = element_text(size = 30), aspect.ratio = 1)
+VlnPlot(seurat, features=« Sox4 »)
