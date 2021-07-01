@@ -1,1 +1,2 @@
-# IntImmunol_Fig1
+# scRNAseq
+Single-cell RNA sequencing (scRNA-seq) analysis described in an article by Mino et al, entitiled “The Transcription Factor Sox4 is Required for Thymic Tuft Cell Development”. Data of thymic stromal cells were extracted from the GSE dataset (accession no. GSE103967, experiment ID: thymus_stroma_WT), and graph-based clustering was performed using the Seurat R Package (v.3.1.2) after normalization and cell cycle correction.
